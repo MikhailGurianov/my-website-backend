@@ -113,3 +113,10 @@ app.listen(PORT, () => {
     console.log(`🚀 Бэкенд запущен: http://localhost:${PORT}`);
     console.log(`📁 База данных: ${path.join(__dirname, 'database', 'website.db')}`);
 });
+// Сохраняем БД при закрытии сервера
+process.on('SIGINT', () => {
+    console.log('\n💾 Сохранение базы данных...');
+    const SQL = require('sql.js');
+    // БД уже сохраняется после каждой операции
+    process.exit(0);
+});

@@ -1,26 +1,37 @@
-const sqlite3 = require('sqlite3').verbose();
+const initSqlJs = require('sql.js');
 const path = require('path');
+const fs = require('fs');
 
-// Путь к файлу базы данных
 const dbPath = path.join(__dirname, 'database', 'website.db');
 
-// Инициализируем базу данных
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-        console.error('❌ Ошибка подключения к БД:', err.message);
-    } else {
-        console.log('✅ SQLite база подключена:', dbPath);
+let db;
+
+// Инициализация базы данных
+async function initDatabase() {
+    try {
+        const SQL = await initSqlJs();
+        
+        // Проверяем, существует ли файл БД
+        if (fs.existsSync(dbPath)) {
+            const fileBuffer = fs.readFileSync(dbPath);
+            db = new SQL.Database(fileBuffer);
+            console.log('✅ SQLite база загружена из файла');
+        } else {
+            db = new SQL.Database();
+            console.log('✅ Создана новая SQLite база');
+        }
+        
+        // Создаём таблицы
+        initTables();
+        
+    } catch (err) {
+        console.error('❌ Ошибка инициализации БД:', err);
     }
-});
+}
 
-// Включаем поддержку внешних ключей
-db.run(`PRAGMA foreign_keys = ON`);
-
-// Функция инициализации таблиц
 function initTables() {
-    return new Promise((resolve, reject) => {
-        db.exec(`
-            -- Таблица Users
+    try {
+        db.run(`
             CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 login TEXT UNIQUE NOT NULL,
@@ -28,9 +39,10 @@ function initTables() {
                 email TEXT UNIQUE NOT NULL,
                 role TEXT DEFAULT 'reader' CHECK(role IN ('reader', 'author', 'editor', 'admin')),
                 registration_date DATETIME DEFAULT CURRENT_TIMESTAMP
-            );
-
-            -- Таблица Authors
+            )
+        `);
+        
+        db.run(`
             CREATE TABLE IF NOT EXISTS authors (
                 author_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
@@ -39,15 +51,17 @@ function initTables() {
                 avatar TEXT,
                 contacts TEXT,
                 FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
-            );
-
-            -- Таблица Categories
+            )
+        `);
+        
+        db.run(`
             CREATE TABLE IF NOT EXISTS categories (
                 category_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT UNIQUE NOT NULL
-            );
-
-            -- Таблица Posts
+            )
+        `);
+        
+        db.run(`
             CREATE TABLE IF NOT EXISTS posts (
                 post_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,
@@ -60,9 +74,10 @@ function initTables() {
                 category_id INTEGER,
                 FOREIGN KEY (author_id) REFERENCES authors(author_id) ON DELETE SET NULL,
                 FOREIGN KEY (category_id) REFERENCES categories(category_id) ON DELETE SET NULL
-            );
-
-            -- Таблица Media
+            )
+        `);
+        
+        db.run(`
             CREATE TABLE IF NOT EXISTS media (
                 media_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 post_id INTEGER,
@@ -70,9 +85,10 @@ function initTables() {
                 type TEXT,
                 size INTEGER,
                 FOREIGN KEY (post_id) REFERENCES posts(post_id) ON DELETE CASCADE
-            );
-
-            -- Таблица Tasks
+            )
+        `);
+        
+        db.run(`
             CREATE TABLE IF NOT EXISTS tasks (
                 task_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 description TEXT NOT NULL,
@@ -82,20 +98,81 @@ function initTables() {
                 executor_id INTEGER,
                 FOREIGN KEY (assigner_id) REFERENCES users(user_id),
                 FOREIGN KEY (executor_id) REFERENCES users(user_id)
-            );
-        `, (err) => {
-            if (err) {
-                console.error('❌ Ошибка создания таблиц:', err.message);
-                reject(err);
-            } else {
-                console.log('✅ Таблицы созданы/проверены');
-                resolve();
-            }
-        });
-    });
+            )
+        `);
+        
+        // Сохраняем БД на диск
+        saveDatabase();
+        
+        console.log('✅ Таблицы созданы/проверены');
+    } catch (err) {
+        console.error('❌ Ошибка создания таблиц:', err.message);
+    }
 }
 
-// Инициализируем при загрузке
-initTables();
+// Функция сохранения БД на диск
+function saveDatabase() {
+    try {
+        const data = db.export();
+        const buffer = Buffer.from(data);
+        
+        // Создаём папку database, если нет
+        const dbDir = path.dirname(dbPath);
+        if (!fs.existsSync(dbDir)) {
+            fs.mkdirSync(dbDir, { recursive: true });
+        }
+        
+        fs.writeFileSync(dbPath, buffer);
+    } catch (err) {
+        console.error('❌ Ошибка сохранения БД:', err);
+    }
+}
 
-module.exports = { db };
+// Обёртки для совместимости с твоим кодом
+const dbWrapper = {
+    run(sql, params = [], callback) {
+        try {
+            db.run(sql, params);
+            saveDatabase();
+            if (callback) callback.call({ lastID: db.exec("SELECT last_insert_rowid()")[0].values[0][0] }, null);
+        } catch (err) {
+            if (callback) callback(err);
+        }
+    },
+    
+    get(sql, params = [], callback) {
+        try {
+            const stmt = db.prepare(sql);
+            stmt.bind(params);
+            if (stmt.step()) {
+                const row = stmt.getAsObject();
+                if (callback) callback(null, row);
+            } else {
+                if (callback) callback(null, undefined);
+            }
+            stmt.free();
+        } catch (err) {
+            if (callback) callback(err);
+        }
+    },
+    
+    all(sql, params = [], callback) {
+        try {
+            const stmt = db.prepare(sql);
+            stmt.bind(params);
+            const results = [];
+            while (stmt.step()) {
+                results.push(stmt.getAsObject());
+            }
+            stmt.free();
+            if (callback) callback(null, results);
+        } catch (err) {
+            if (callback) callback(err);
+        }
+    }
+};
+
+// Инициализируем при загрузке
+initDatabase();
+
+module.exports = { db: dbWrapper };

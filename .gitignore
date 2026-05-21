@@ -1,24 +1,24 @@
-# Папка с установленными пакетами
-node_modules/
+    # Папка с установленными пакетами
+    node_modules/
 
-# SQLite базы данных
-*.db
-*.db-shm
-*.db-wal
+    # SQLite базы данных
+    *.db
+    *.db-shm
+    *.db-wal
 
-# Переменные окружения
-.env
-.env.local
-.env.production
+    # Переменные окружения
+    .env
+    .env.local
+    .env.production
 
-# Логи
-*.log
-npm-debug.log*
+    # Логи
+    *.log
+    npm-debug.log*
 
-# Системные файлы
-.DS_Store
-Thumbs.db
+    # Системные файлы
+    .DS_Store
+    Thumbs.db
 
-# Временные файлы
-*.tmp
-*.temp
+    # Временные файлы
+    *.tmp
+    *.temp
