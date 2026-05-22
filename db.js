@@ -129,16 +129,29 @@ function saveDatabase() {
 }
 
 // Обёртки для совместимости с твоим кодом
+// Обёртки для совместимости с твоим кодом
 const dbWrapper = {
     run(sql, params = [], callback) {
         try {
             db.run(sql, params);
             saveDatabase();
-            if (callback) callback.call({ lastID: db.exec("SELECT last_insert_rowid()")[0].values[0][0] }, null);
+            
+            // Получаем последний вставленный ID
+            let lastID = 1; // По умолчанию 1
+            try {
+                const result = db.exec("SELECT last_insert_rowid() as id");
+                if (result && result[0] && result[0].values && result[0].values[0]) {
+                    lastID = result[0].values[0][0];
+                }
+            } catch (err) {
+                console.error('⚠️  Не удалось получить last_insert_rowid:', err);
+            }
+            
+            if (callback) callback.call({ lastID: lastID }, null);
         } catch (err) {
             if (callback) callback(err);
         }
-    },
+    }, // ← Только запятая, без лишних скобок!
     
     get(sql, params = [], callback) {
         try {
@@ -171,7 +184,6 @@ const dbWrapper = {
         }
     }
 };
-
 // Инициализируем при загрузке
 initDatabase();
 
