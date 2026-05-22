@@ -129,29 +129,49 @@ function saveDatabase() {
 }
 
 // Обёртки для совместимости с твоим кодом
-// Обёртки для совместимости с твоим кодом
 const dbWrapper = {
     run(sql, params = [], callback) {
         try {
+            // Определяем, INSERT ли это
+            const isInsert = sql.trim().toUpperCase().startsWith('INSERT');
+            let lastID = 1;
+            
+            // Для INSERT получаем ID ДО выполнения
+            if (isInsert) {
+                try {
+                    const result = db.exec("SELECT MAX(user_id) as maxId FROM users");
+                    if (result && result[0] && result[0].values[0] && result[0].values[0][0]) {
+                        lastID = result[0].values[0][0] + 1;
+                    }
+                } catch (err) {
+                    console.error('⚠️ Не удалось получить max ID:', err);
+                }
+            }
+            
+            // Выполняем запрос
             db.run(sql, params);
             saveDatabase();
             
-            // Получаем последний вставленный ID
-            let lastID = 1; // По умолчанию 1
-            try {
-                const result = db.exec("SELECT last_insert_rowid() as id");
-                if (result && result[0] && result[0].values && result[0].values[0]) {
-                    lastID = result[0].values[0][0];
+            // Для не-INSERT получаем last_insert_rowid
+            if (!isInsert) {
+                try {
+                    const result = db.exec("SELECT last_insert_rowid() as id");
+                    if (result && result[0] && result[0].values[0]) {
+                        lastID = result[0].values[0][0];
+                    }
+                } catch (err) {
+                    console.error('⚠️ Не удалось получить last_insert_rowid:', err);
                 }
-            } catch (err) {
-                console.error('⚠️  Не удалось получить last_insert_rowid:', err);
             }
             
+            // Вызываем callback с правильным ID
             if (callback) callback.call({ lastID: lastID }, null);
+            
         } catch (err) {
+            console.error('❌ Ошибка в db.run:', err);
             if (callback) callback(err);
         }
-    }, // ← Только запятая, без лишних скобок!
+    },
     
     get(sql, params = [], callback) {
         try {
@@ -184,6 +204,7 @@ const dbWrapper = {
         }
     }
 };
+
 // Инициализируем при загрузке
 initDatabase();
 
