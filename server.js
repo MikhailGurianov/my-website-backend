@@ -6,11 +6,10 @@ const { db } = require('./db');
 
 const app = express();
 
-// ✅ Разрешаем CORS для Live Server
 app.use(cors({
-    origin: ['http://127.0.0.1:5500', 'http://localhost:5500'],
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE']
+    origin: '*', // Разрешаем запросы с ЛЮБОГО домена (для демо это ОК)
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
